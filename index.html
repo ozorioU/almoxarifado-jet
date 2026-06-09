@@ -105,9 +105,40 @@ const calcL2LAcum = p => {
   };
 };
 
+// ─── STORAGE HELPERS ──────────────────────────────────────────────────────────
+
+const uploadArquivo = async (file, path) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${SB_STORAGE_URL}/object/sir-orcamentos/${path}`, {
+    method: "POST",
+    headers: {
+      "apikey": SB_KEY,
+      "Authorization": "Bearer " + SB_KEY
+    },
+    body: formData
+  });
+  if (!res.ok) {
+    const e = await res.text();
+    console.error("Upload error:", e);
+    return null;
+  }
+  return `${SB_STORAGE_URL}/object/public/sir-orcamentos/${path}`;
+};
+const deleteArquivo = async path => {
+  await fetch(`${SB_STORAGE_URL}/object/sir-orcamentos/${path}`, {
+    method: "DELETE",
+    headers: {
+      "apikey": SB_KEY,
+      "Authorization": "Bearer " + SB_KEY
+    }
+  });
+};
+
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 const SB_URL = "https://lddprbkfrqmrvspcstsm.supabase.co";
 const SB_KEY = "sb_publishable_jXZSpv_jNAYIK3c06tdJvw_V_1bIND2";
+const SB_STORAGE_URL = SB_URL + "/storage/v1";
 async function sbFetch(table, method = "GET", body = null, query = "", extraHeaders = {}) {
   const url = SB_URL + "/rest/v1/" + table + (query ? "?" + query : "");
   const headers = {
@@ -2752,11 +2783,6 @@ function LinhaTempoWidget({
     setPage("obras");
   };
   const [detalheModal, setDetalheModal] = React.useState(null);
-
-  // Investimentos futuros
-  const invUnico = investInt.filter(i => i.tipo === "unico").reduce((s, i) => s + (i.valor || 0), 0);
-  const invRecorrente = investInt.filter(i => i.tipo === "recorrente").reduce((s, i) => s + (i.valor || 0), 0);
-  const invTotal = invUnico + invRecorrente;
   const etapas = [{
     key: "ag_orc",
     label: "Aguardando\nOrçamento",
@@ -2971,11 +2997,6 @@ function StatusObrasWidget({
     setPage("obras");
   };
   const [detalheModal, setDetalheModal] = React.useState(null);
-
-  // Investimentos futuros
-  const invUnico = investInt.filter(i => i.tipo === "unico").reduce((s, i) => s + (i.valor || 0), 0);
-  const invRecorrente = investInt.filter(i => i.tipo === "recorrente").reduce((s, i) => s + (i.valor || 0), 0);
-  const invTotal = invUnico + invRecorrente;
   const frowStyle = {
     display: "flex",
     alignItems: "center",
@@ -4004,7 +4025,7 @@ function Dashboard({
       const orc_key = OBRA_ORC_MAP[obra.cod];
       const orc_itens = orc_key ? BUDGET_ITEMS_DATA[orc_key] || [] : [];
       const gastoCalc = orc_itens.reduce((s, item) => {
-        const itemBase = ALL_ITEMS.find(ai => ai.descricao === item.descricao);
+        const itemBase = (window.__SIR_ITEMS || ALL_ITEMS).find(ai => ai.descricao === item.descricao);
         const cu = (itemBase === null || itemBase === void 0 ? void 0 : itemBase.cu) || 0;
         return s + (cu > 0 ? cu * (item.qtd || 1) : 0);
       }, 0);
@@ -4303,7 +4324,7 @@ function Dashboard({
     disabled: mesSocietario === "acumulado" || mesesDisponiveisD.indexOf(mesSocietario) >= mesesDisponiveisD.length - 1,
     onClick: () => {
       const i = mesesDisponiveisD.indexOf(mesSocietario);
-      setMesSocietario(mesesDisponiveisD[i + 1]);
+      if (i >= 0 && i < mesesDisponiveisD.length - 1) setMesSocietario(mesesDisponiveisD[i + 1]);
     }
   }, "\u25C0"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4335,11 +4356,10 @@ function Dashboard({
       gap: 0,
       fontSize: 13
     },
-    disabled: mesSocietario !== "acumulado" && mesesDisponiveisD.indexOf(mesSocietario) <= 0,
+    disabled: mesSocietario === "acumulado" || mesesDisponiveisD.indexOf(mesSocietario) <= 0,
     onClick: () => {
       const i = mesesDisponiveisD.indexOf(mesSocietario);
-      if (i === 0) return;
-      setMesSocietario(mesesDisponiveisD[i - 1]);
+      if (i > 0) setMesSocietario(mesesDisponiveisD[i - 1]);
     }
   }, "\u25B6"), /*#__PURE__*/React.createElement("button", {
     style: {
@@ -4734,11 +4754,36 @@ function Dashboard({
       fontSize: 18,
       color: "#15803d"
     }
-  }, fmt(invUnico))), /*#__PURE__*/React.createElement("div", {
+  }, fmt(invUnico))), investInt.filter(i => i.tipo === "unico").map(i => /*#__PURE__*/React.createElement("div", {
+    key: i.id,
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "5px 10px 5px 36px",
+      fontSize: 11,
+      borderBottom: "1px solid #f3f4f6",
+      background: "#f9fafb"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#6b7280",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      maxWidth: 140
+    }
+  }, i.descricao), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "monospace",
+      fontWeight: 600,
+      color: "#15803d",
+      flexShrink: 0
+    }
+  }, fmt(i.valor)))), /*#__PURE__*/React.createElement("div", {
     style: {
       ...frowStyle,
-      cursor: "pointer",
-      borderBottom: "none"
+      cursor: "pointer"
     },
     onClick: () => setPage("investint")
   }, /*#__PURE__*/React.createElement("span", {
@@ -4769,7 +4814,33 @@ function Dashboard({
       fontSize: 18,
       color: "#e8650a"
     }
-  }, fmt(invRecorrente))), invTotal === 0 && /*#__PURE__*/React.createElement("div", {
+  }, fmt(invRecorrente))), investInt.filter(i => i.tipo === "recorrente").map(i => /*#__PURE__*/React.createElement("div", {
+    key: i.id,
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "5px 10px 5px 36px",
+      fontSize: 11,
+      borderBottom: "1px solid #f3f4f6",
+      background: "#fff7f0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#6b7280",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      maxWidth: 140
+    }
+  }, i.descricao), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "monospace",
+      fontWeight: 600,
+      color: "#e8650a",
+      flexShrink: 0
+    }
+  }, fmt(i.valor)))), invTotal === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       color: "#9ca3af",
@@ -4784,57 +4855,174 @@ function Dashboard({
     },
     onClick: () => setPage("investint")
   }, "+ Adicionar"))), /*#__PURE__*/React.createElement("div", {
-    style: card
-  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontWeight: 700,
-      fontSize: 13,
-      marginBottom: 14
+      ...card,
+      padding: "18px 20px"
     }
-  }, "\uD83D\uDCC8 Faturado \xD7 Custo Mensal"), (() => {
-    // Gerar dados mensais a partir das obras
+  }, ((_acums, _acums2, _acums3, _acums4) => {
     const hoje = new Date();
-    const meses = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-      meses.push({
-        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-        label: d.toLocaleString("pt-BR", {
-          month: "short"
-        }).replace(".", "")
-      });
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+    const nomeMesC = k => new Date(k + "-02").toLocaleString("pt-BR", {
+      month: "short",
+      year: "2-digit"
+    }).replace(".", "");
+
+    // Gerar todos os meses desde jan/2026 até hoje
+    const mesesHist = [];
+    let y = 2026,
+      m = 1;
+    while (`${y}-${String(m).padStart(2, "0")}` <= mesAtual) {
+      mesesHist.push(`${y}-${String(m).padStart(2, "0")}`);
+      m++;
+      if (m > 12) {
+        m = 1;
+        y++;
+      }
     }
-    const dados = meses.map(m => {
-      const fat = obras.filter(o => o.env_fat && o.env_fat.slice(0, 7) === m.key).reduce((s, o) => s + (o.fat || 0), 0);
-      const cus = obras.filter(o => o.conclusao && o.conclusao.slice(0, 7) === m.key).reduce((s, o) => s + (o.custo || 0), 0);
+
+    // Gerar 6 meses futuros
+    const mesesFut = [];
+    let fy = hoje.getFullYear(),
+      fm = hoje.getMonth() + 2;
+    for (let i = 0; i < 1; i++) {
+      if (fm > 12) {
+        fm = 1;
+        fy++;
+      }
+      mesesFut.push(`${fy}-${String(fm).padStart(2, "0")}`);
+      fm++;
+    }
+
+    // Média de fat obras (últimos 3 meses com fat>0)
+    const mesesComFat = mesesHist.filter(mes => obras.some(o => o.env_fat && o.env_fat.slice(0, 7) === mes && o.fat > 0)).slice(-3);
+    const mediaFatObras = mesesComFat.length > 0 ? mesesComFat.reduce((s, mes) => s + obras.filter(o => o.env_fat && o.env_fat.slice(0, 7) === mes).reduce((ss, o) => ss + (o.fat || 0), 0), 0) / mesesComFat.length : 0;
+
+    // Custos recorrentes mensais (custosInt)
+    const cusRecMensal = custosInt.filter(c => c.recorrente).reduce((s, c) => s + (c.valor || 0), 0);
+    // Fat recorrente mensal (fatInt contratos recorrentes — não tem campo recorrente, mas contratos mensais)
+    // L2L recorrente
+    const fatL2LMensal = pontos.reduce((s, p) => s + (parseFloat(p.faturamento) || 0), 0);
+    const cusL2LMensal = pontos.reduce((s, p) => s + (parseFloat(p.custo) || 0), 0);
+
+    // Investimentos recorrentes mensais
+    const investRecMensal = investInt.filter(i => i.tipo === "recorrente").reduce((s, i) => s + (i.valor || 0), 0);
+
+    // Calcular dados históricos por mês
+    const dadosHist = mesesHist.map(mes => {
+      const fatObras = obras.filter(o => o.env_fat && o.env_fat.slice(0, 7) === mes).reduce((s, o) => s + (o.fat || 0), 0);
+      const fatContratos = fatInt.filter(f => f.categoria === "Contratos" && f.data && f.data.slice(0, 7) === mes).reduce((s, f) => s + (f.valor || 0), 0);
+      const fatL2L = pontos.filter(p => p.ativacao && p.ativacao.slice(0, 7) <= mes && mesJaProcessado(mes)).reduce((s, p) => s + (parseFloat(p.faturamento) || 0), 0);
+      const fat = fatObras + fatContratos + fatL2L;
+      const cusObras = obras.filter(o => o.conclusao && o.conclusao.slice(0, 7) === mes).reduce((s, o) => s + (o.custo || 0), 0);
+      const cusL2L = pontos.filter(p => p.ativacao && p.ativacao.slice(0, 7) <= mes && mesJaProcessado(mes)).reduce((s, p) => s + calcL2LMes(parseFloat(p.custo) || 0, p.ativacao, mes), 0);
+      const cusCadastrado = custosInt.filter(c => !c.recorrente && c.data && c.data.slice(0, 7) === mes).reduce((s, c) => s + (c.valor || 0), 0);
+      const cusRec = custosInt.filter(c => c.recorrente && (!c.data || c.data.slice(0, 7) <= mes)).reduce((s, c) => s + (c.valor || 0), 0);
+      const imp = calcImpostos(fat);
+      const cus = cusObras + cusL2L + cusCadastrado + cusRec + imp; // investRec não incluído
+
       return {
-        ...m,
+        mes,
+        label: nomeMesC(mes),
         fat,
-        cus
+        cus,
+        lucro: fat - cus,
+        futuro: false
       };
     });
-    const maxVal = Math.max(...dados.map(d => Math.max(d.fat, d.cus)), 1);
-    const H = 160; // altura área gráfico
-    const W = 100 / dados.length;
 
-    // Pontos para linha de tendência faturado
-    const fatPts = dados.map((d, i) => ({
-      x: i / (dados.length - 1 || 1) * 100,
-      y: 100 - d.fat / maxVal * 100
-    }));
-    const cusPts = dados.map((d, i) => ({
-      x: i / (dados.length - 1 || 1) * 100,
-      y: 100 - d.cus / maxVal * 100
-    }));
-    const toSvgPath = pts => pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+    // Calcular projeções futuras
+    const dadosFut = mesesFut.map((mes, i) => {
+      const fat = mediaFatObras + fatL2LMensal;
+      const cus = cusRecMensal + cusL2LMensal + calcImpostos(fat);
+      return {
+        mes,
+        label: nomeMesC(mes),
+        fat,
+        cus,
+        lucro: fat - cus,
+        futuro: true
+      };
+    });
+    const todos = [...dadosHist, ...dadosFut];
+    const maxVal = Math.max(...todos.map(d => Math.max(d.fat, d.cus, 1)));
+
+    // Mês que começa a ter lucro futuro
+    const primLucro = dadosFut.find(d => d.lucro > 0);
+
+    // Acumulado
+    let acumFat = 0,
+      acumCus = 0;
+    const acums = todos.map(d => {
+      acumFat += d.fat;
+      acumCus += d.cus;
+      return {
+        fat: acumFat,
+        cus: acumCus,
+        lucro: acumFat - acumCus
+      };
+    });
+    const [hovIdx, setHovIdx] = React.useState(null);
+    const hovDado = hovIdx != null ? todos[hovIdx] : null;
+    const H = 180;
     return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        gap: 14,
-        marginBottom: 10
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 16,
+        flexWrap: "wrap",
+        gap: 8
       }
-    }, [["#10b981", "Faturado"], ["#ef4444", "Custo"]].map(([c, l]) => /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 13
+      }
+    }, "\uD83D\uDCCA Hist\xF3rico & Proje\xE7\xE3o \u2014 Faturado \xD7 Custo"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 14,
+        flexWrap: "wrap"
+      }
+    }, [{
+      c: "#10b981",
+      l: "Faturado (real)"
+    }, {
+      c: "#ef4444",
+      l: "Custo (real)"
+    }, {
+      c: "#10b981",
+      l: "Fat. projetado",
+      dash: true
+    }, {
+      c: "#ef4444",
+      l: "Cus. projetado",
+      dash: true
+    }].map(({
+      c,
+      l,
+      dash
+    }) => /*#__PURE__*/React.createElement("div", {
       key: l,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        fontSize: 10,
+        color: "#6b7280"
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "18",
+      height: "8"
+    }, /*#__PURE__*/React.createElement("line", {
+      x1: "0",
+      y1: "4",
+      x2: "18",
+      y2: "4",
+      stroke: c,
+      strokeWidth: "2",
+      strokeDasharray: dash ? "4 2" : ""
+    })), l)), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         alignItems: "center",
@@ -4847,27 +5035,49 @@ function Dashboard({
         width: 10,
         height: 10,
         borderRadius: 2,
-        background: c
+        background: "#fef9c3",
+        border: "1px solid #fde047"
       }
-    }), l)), /*#__PURE__*/React.createElement("div", {
+    }), "Proje\xE7\xE3o"))), hovDado && /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        alignItems: "center",
-        gap: 5,
-        fontSize: 10,
-        color: "#6b7280"
+        gap: 16,
+        padding: "8px 12px",
+        background: "#f9fafb",
+        borderRadius: 8,
+        marginBottom: 10,
+        fontSize: 11,
+        flexWrap: "wrap",
+        border: "1px solid #e5e7eb"
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("span", {
       style: {
-        width: 16,
-        height: 2,
-        background: "#3b82f6",
-        borderRadius: 1
+        fontWeight: 700,
+        color: "#374151"
       }
-    }), "Tend\xEAncia")), /*#__PURE__*/React.createElement("div", {
+    }, hovDado.label, " ", hovDado.futuro ? "(proj.)" : ""), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#10b981"
+      }
+    }, "Fat: ", fmt(hovDado.fat)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#ef4444"
+      }
+    }, "Cus: ", fmt(hovDado.cus)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 700,
+        color: hovDado.lucro >= 0 ? "#059669" : "#dc2626"
+      }
+    }, hovDado.lucro >= 0 ? "Lucro" : "Prejuízo", ": ", fmt(Math.abs(hovDado.lucro))), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#6b7280",
+        fontSize: 10
+      }
+    }, "Acumulado: ", fmt(acums[hovIdx].lucro))), /*#__PURE__*/React.createElement("div", {
       style: {
         position: "relative",
-        height: H
+        height: H,
+        marginBottom: 4
       }
     }, [0, 25, 50, 75, 100].map(p => /*#__PURE__*/React.createElement("div", {
       key: p,
@@ -4877,138 +5087,126 @@ function Dashboard({
         left: 0,
         right: 0,
         borderTop: "1px dashed #f3f4f6",
-        display: "flex",
-        alignItems: "center"
+        zIndex: 0
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        left: `${dadosHist.length / todos.length * 100}%`,
+        borderLeft: "2px dashed #fbbf24",
+        zIndex: 2,
+        pointerEvents: "none"
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
+        position: "absolute",
+        top: 0,
+        left: 4,
         fontSize: 9,
-        color: "#d1d5db",
-        marginLeft: 2,
-        lineHeight: 1
+        color: "#d97706",
+        whiteSpace: "nowrap"
       }
-    }, p === 0 ? fmt(maxVal) : p === 50 ? fmt(maxVal / 2) : ""))), /*#__PURE__*/React.createElement("div", {
+    }, "Proje\xE7\xE3o \u2192")), /*#__PURE__*/React.createElement("div", {
       style: {
         position: "absolute",
         inset: 0,
         display: "flex",
         alignItems: "flex-end",
-        gap: 2,
-        padding: "0 4px"
+        gap: 1
       }
-    }, dados.map(d => {
-      const fH = maxVal > 0 ? d.fat / maxVal * 100 : 0;
-      const cH = maxVal > 0 ? d.cus / maxVal * 100 : 0;
+    }, todos.map((d, i) => {
+      const fH = d.fat / maxVal * 100;
+      const cH = d.cus / maxVal * 100;
+      const isHov = hovIdx === i;
       return /*#__PURE__*/React.createElement("div", {
-        key: d.key,
+        key: d.mes,
         style: {
           flex: 1,
-          display: "flex",
-          gap: 2,
-          alignItems: "flex-end",
           height: "100%",
-          position: "relative"
-        }
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 1,
+          position: "relative",
+          cursor: "pointer",
+          background: d.futuro ? "rgba(254,249,195,0.4)" : isHov ? "rgba(0,0,0,.03)" : "transparent",
+          borderRadius: "3px 3px 0 0"
+        },
+        onMouseEnter: () => setHovIdx(i),
+        onMouseLeave: () => setHovIdx(null)
       }, /*#__PURE__*/React.createElement("div", {
         style: {
           flex: 1,
-          background: "#10b981",
-          borderRadius: "3px 3px 0 0",
+          background: d.futuro ? "rgba(16,185,129,.4)" : "#10b981",
+          borderRadius: "2px 2px 0 0",
           height: `${fH}%`,
           minHeight: fH > 0 ? 2 : 0,
-          transition: "height .4s",
-          opacity: .85,
-          cursor: "default"
-        },
-        title: `${d.label} - Faturado: ${fmt(d.fat)}`
+          transition: "height .3s"
+        }
       }), /*#__PURE__*/React.createElement("div", {
         style: {
           flex: 1,
-          background: "#ef4444",
-          borderRadius: "3px 3px 0 0",
+          background: d.futuro ? "rgba(239,68,68,.4)" : "#ef4444",
+          borderRadius: "2px 2px 0 0",
           height: `${cH}%`,
           minHeight: cH > 0 ? 2 : 0,
-          transition: "height .4s",
-          opacity: .85,
-          cursor: "default"
+          transition: "height .3s"
+        }
+      }), (d.fat > 0 || d.cus > 0) && /*#__PURE__*/React.createElement("div", {
+        style: {
+          position: "absolute",
+          bottom: Math.max(fH, cH) + 1 + "%",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: d.lucro >= 0 ? "#059669" : "#dc2626",
+          zIndex: 3
         },
-        title: `${d.label} - Custo: ${fmt(d.cus)}`
+        title: `${d.lucro >= 0 ? "Lucro" : "Prejuízo"}: ${fmt(Math.abs(d.lucro))}`
       }));
-    })), /*#__PURE__*/React.createElement("svg", {
-      style: {
-        position: "absolute",
-        inset: 0,
-        width: "100%",
-        height: "100%",
-        overflow: "visible",
-        pointerEvents: "none"
-      },
-      viewBox: "0 0 100 100",
-      preserveAspectRatio: "none"
-    }, dados.some(d => d.fat > 0) && /*#__PURE__*/React.createElement("path", {
-      d: toSvgPath(fatPts),
-      fill: "none",
-      stroke: "#059669",
-      strokeWidth: "0.8",
-      strokeDasharray: "3 2",
-      vectorEffect: "non-scaling-stroke"
-    }), dados.some(d => d.cus > 0) && /*#__PURE__*/React.createElement("path", {
-      d: toSvgPath(cusPts),
-      fill: "none",
-      stroke: "#dc2626",
-      strokeWidth: "0.8",
-      strokeDasharray: "3 2",
-      vectorEffect: "non-scaling-stroke"
-    }), fatPts.map((p, i) => dados[i].fat > 0 && /*#__PURE__*/React.createElement("circle", {
-      key: i,
-      cx: p.x,
-      cy: p.y,
-      r: "1.5",
-      fill: "#059669",
-      vectorEffect: "non-scaling-stroke"
-    })), cusPts.map((p, i) => dados[i].cus > 0 && /*#__PURE__*/React.createElement("circle", {
-      key: i,
-      cx: p.x,
-      cy: p.y,
-      r: "1.5",
-      fill: "#dc2626",
-      vectorEffect: "non-scaling-stroke"
-    })))), /*#__PURE__*/React.createElement("div", {
+    }))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        marginTop: 6,
-        gap: 2,
-        padding: "0 4px"
+        gap: 1,
+        marginBottom: 12
       }
-    }, dados.map(d => /*#__PURE__*/React.createElement("div", {
-      key: d.key,
+    }, todos.map((d, i) => /*#__PURE__*/React.createElement("div", {
+      key: d.mes,
       style: {
         flex: 1,
         textAlign: "center",
-        fontSize: 10,
-        color: "#9ca3af",
+        fontSize: 9,
+        color: d.futuro ? "#d97706" : "#9ca3af",
+        fontWeight: d.mes === mesAtual ? "700" : "400",
         textTransform: "capitalize"
       }
     }, d.label))), /*#__PURE__*/React.createElement("div", {
       style: {
-        display: "flex",
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr 1fr 1fr",
         gap: 8,
-        marginTop: 10,
-        borderTop: "1px solid #f3f4f6",
-        paddingTop: 8
+        paddingTop: 12,
+        borderTop: "1px solid #f3f4f6"
       }
     }, [{
-      l: "Total Faturado",
-      v: fmt(tf),
+      l: "Fat. Acumulado",
+      v: fmt(((_acums = acums[dadosHist.length - 1]) === null || _acums === void 0 ? void 0 : _acums.fat) || 0),
       c: "#10b981"
     }, {
-      l: "Total Custo",
-      v: fmt(tc),
+      l: "Cus. Acumulado",
+      v: fmt(((_acums2 = acums[dadosHist.length - 1]) === null || _acums2 === void 0 ? void 0 : _acums2.cus) || 0),
       c: "#ef4444"
     }, {
-      l: "Lucro",
-      v: fmt(tf - tc),
-      c: tf - tc >= 0 ? "#059669" : "#dc2626"
+      l: "Lucro Acumulado",
+      v: fmt(((_acums3 = acums[dadosHist.length - 1]) === null || _acums3 === void 0 ? void 0 : _acums3.lucro) || 0),
+      c: (((_acums4 = acums[dadosHist.length - 1]) === null || _acums4 === void 0 ? void 0 : _acums4.lucro) || 0) >= 0 ? "#059669" : "#dc2626"
+    }, {
+      l: primLucro ? "1º Mês Lucro (proj.)" : "Sem proj. lucro",
+      v: primLucro ? nomeMesC(primLucro.mes) : "—",
+      c: "#d97706"
     }].map(({
       l,
       v,
@@ -5016,23 +5214,35 @@ function Dashboard({
     }) => /*#__PURE__*/React.createElement("div", {
       key: l,
       style: {
-        flex: 1,
-        textAlign: "center"
+        textAlign: "center",
+        padding: "8px",
+        background: "#f9fafb",
+        borderRadius: 7
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 9,
         color: "#9ca3af",
-        marginBottom: 2
+        marginBottom: 3
       }
     }, l), /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "monospace",
         fontWeight: 700,
-        fontSize: 11,
+        fontSize: 12,
         color: c
       }
-    }, v)))));
+    }, v)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 10,
+        padding: "8px 12px",
+        background: "#fffbeb",
+        borderRadius: 7,
+        border: "1px solid #fde68a",
+        fontSize: 10,
+        color: "#92400e"
+      }
+    }, /*#__PURE__*/React.createElement("strong", null, "Proje\xE7\xE3o baseada em:"), " M\xE9dia fat. obras (\xFAltimos 3 meses com valor): ", fmt(mediaFatObras), "/m\xEAs \xB7 L2L: ", fmt(fatL2LMensal), "/m\xEAs \xB7 Custos recorrentes: ", fmt(cusRecMensal), "/m\xEAs \xB7 L2L custo: ", fmt(cusL2LMensal), "/m\xEAs"));
   })())), detalheModal && (() => {
     const CAT_LABEL_MAP = {
       "Obras": "Obras",
@@ -5318,7 +5528,7 @@ function ObrasPage({
     const orc_key = OBRA_ORC_MAP[o.cod];
     const orc_itens = orc_key ? BUDGET_ITEMS_DATA[orc_key] || [] : [];
     const gastoCalc = orc_itens.reduce((s, item) => {
-      const itemBase = ALL_ITEMS.find(ai => ai.descricao === item.descricao);
+      const itemBase = (window.__SIR_ITEMS || ALL_ITEMS).find(ai => ai.descricao === item.descricao);
       const cu = (itemBase === null || itemBase === void 0 ? void 0 : itemBase.cu) || 0;
       return s + (cu > 0 ? cu * (item.qtd || 1) : 0);
     }, 0);
@@ -6252,7 +6462,7 @@ function CustosPage({
     const orc_key = OBRA_ORC_MAP[o.cod];
     const orc_itens = orc_key ? BUDGET_ITEMS_DATA[orc_key] || [] : [];
     const gastoCalc = orc_itens.reduce((s, item) => {
-      const itemBase = ALL_ITEMS.find(ai => ai.descricao === item.descricao);
+      const itemBase = (window.__SIR_ITEMS || ALL_ITEMS).find(ai => ai.descricao === item.descricao);
       const cu = (itemBase === null || itemBase === void 0 ? void 0 : itemBase.cu) || 0;
       return s + (cu > 0 ? cu * (item.qtd || 1) : 0);
     }, 0);
@@ -8526,8 +8736,17 @@ function OrcamentosPage({
   setOpenBudgetId,
   syncBudget,
   delBudget,
+  items = [],
   showToast
 }) {
+  const [arquivos, setArquivos] = React.useState({}); // {budget_id: [{id,nome,url,size,tipo}]}
+  const [uploadModal, setUploadModal] = React.useState(null); // budget em upload
+  const [uploading, setUploading] = React.useState(false);
+  const fileInputRef = React.useRef(null);
+  const [uploadForm, setUploadForm] = React.useState({
+    nome: "",
+    arquivo: null
+  });
   const [pdfData, setPdfData] = useState(null);
   const [search, setSearch] = useState("");
   const [filtroEtapa, setFiltroEtapa] = useState("all");
@@ -8588,9 +8807,7 @@ function OrcamentosPage({
     setForm({
       ...b
     });
-    const key = BUDGET_ID_MAP[b.id];
-    const itens = key && BUDGET_ITEMS_DATA[key] || [];
-    setEditItens(itens.map(i => ({
+    setEditItens((b.itens || []).map(i => ({
       ...i
     })));
     setAddTipo("servico");
@@ -8603,7 +8820,7 @@ function OrcamentosPage({
       alert("Selecione um item.");
       return;
     }
-    const item = ALL_ITEMS.find(i => i.id === addItemId);
+    const item = (items.length > 0 ? items : ALL_ITEMS).find(i => i.id === addItemId);
     if (!item) return;
     const qtd = parseFloat(addQtd) || 1;
     const vt = Math.round(qtd * item.vu * 100) / 100;
@@ -8632,7 +8849,7 @@ function OrcamentosPage({
     const orc_key = OBRA_ORC_MAP[o.cod];
     const orc_itens = orc_key ? BUDGET_ITEMS_DATA[orc_key] || [] : [];
     const gastoCalc = orc_itens.reduce((s, item) => {
-      const itemBase = ALL_ITEMS.find(ai => ai.descricao === item.descricao);
+      const itemBase = (window.__SIR_ITEMS || ALL_ITEMS).find(ai => ai.descricao === item.descricao);
       const cu = (itemBase === null || itemBase === void 0 ? void 0 : itemBase.cu) || 0;
       return s + (cu > 0 ? cu * (item.qtd || 1) : 0);
     }, 0);
@@ -8649,6 +8866,79 @@ function OrcamentosPage({
     setCustosInt(p => [...p, novoCusto]);
     showToast("Obra enviada para Custos!");
   };
+
+  // ── Arquivos nos orçamentos ───────────────────────────────────────────────
+  const loadArquivos = async budgetId => {
+    try {
+      const res = await sb.get("sir_arquivos", "budget_id=eq." + budgetId + "&order=created_at");
+      if (res) setArquivos(p => ({
+        ...p,
+        [budgetId]: res
+      }));
+    } catch (e) {}
+  };
+  const handleUpload = async () => {
+    if (!uploadForm.arquivo || !uploadForm.nome.trim()) {
+      alert("Preencha o nome e selecione um arquivo.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const file = uploadForm.arquivo;
+      const path = uploadModal.id + "/" + Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const url = await uploadArquivo(file, path);
+      if (!url) {
+        showToast("Erro ao enviar arquivo.", "err");
+        setUploading(false);
+        return;
+      }
+      const arq = {
+        id: uid(),
+        budget_id: uploadModal.id,
+        nome: uploadForm.nome.trim(),
+        url,
+        path,
+        size: file.size,
+        tipo: file.type || file.name.split(".").pop(),
+        created_at: new Date().toISOString(),
+        criado_por: (user === null || user === void 0 ? void 0 : user.nome) || ""
+      };
+      await sb.upsert("sir_arquivos", arq);
+      setArquivos(p => ({
+        ...p,
+        [uploadModal.id]: [...(p[uploadModal.id] || []), arq]
+      }));
+      setUploadForm({
+        nome: "",
+        arquivo: null
+      });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      showToast("Arquivo anexado!");
+    } catch (e) {
+      showToast("Erro: " + e.message, "err");
+    }
+    setUploading(false);
+  };
+  const handleDeleteArq = async (budgetId, arq) => {
+    if (!confirm("Excluir " + arq.nome + "?")) return;
+    await deleteArquivo(arq.path);
+    await sbFetch("sir_arquivos", "DELETE", null, "id=eq." + arq.id);
+    setArquivos(p => ({
+      ...p,
+      [budgetId]: (p[budgetId] || []).filter(a => a.id !== arq.id)
+    }));
+    showToast("Arquivo removido.");
+  };
+  const fmtSize = b => b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : b > 1024 ? (b / 1024).toFixed(0) + " KB" : b + " B";
+  const fmtTipo = t => {
+    if (!t) return "📄";
+    if (t.includes("pdf")) return "📕";
+    if (t.includes("image")) return "🖼️";
+    if (t.includes("word") || t.includes("doc")) return "📘";
+    if (t.includes("sheet") || t.includes("excel") || t.includes("xls")) return "📗";
+    if (t.includes("zip") || t.includes("rar")) return "🗜️";
+    return "📄";
+  };
   const save = () => {
     var _form$titulo;
     if (!((_form$titulo = form.titulo) !== null && _form$titulo !== void 0 && _form$titulo.trim())) {
@@ -8659,7 +8949,9 @@ function OrcamentosPage({
       ...form,
       id: form.id || uid(),
       etapa: form.etapa || "rascunho",
-      historico: form.historico || []
+      historico: form.historico || [],
+      itens: editItens,
+      total: totalEdit
     };
     setBudgets(p => p.find(b => b.id === n.id) ? p.map(b => b.id === n.id ? n : b) : [...p, n]);
     setModal(null);
@@ -9103,7 +9395,7 @@ function OrcamentosPage({
     onChange: e => setAddItemId(e.target.value)
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
-  }, "Selecione um item..."), ALL_ITEMS.filter(i => i.tipo === addTipo).map(i => /*#__PURE__*/React.createElement("option", {
+  }, "Selecione um item..."), (items.length > 0 ? items : ALL_ITEMS).filter(i => i.tipo === addTipo).map(i => /*#__PURE__*/React.createElement("option", {
     key: i.id,
     value: i.id
   }, i.descricao, " \u2014 ", fmt(i.vu), "/", i.unidade)))), /*#__PURE__*/React.createElement("div", {
@@ -9233,7 +9525,10 @@ function OrcamentosPage({
     }
   }, "Total: ", fmt(totalEdit))), /*#__PURE__*/React.createElement(MFooter, {
     onCancel: () => setModal(null),
-    onSave: save
+    onSave: () => {
+      console.log("SAVE ORC clicado — syncBudget:", !!syncBudget, "titulo:", form.titulo, "itens:", editItens.length);
+      save();
+    }
   })), (modal === null || modal === void 0 ? void 0 : modal.type) === "aprovar" && (() => {
     const b = modal.budget;
     const etapa = ETAPAS[b.etapa];
@@ -9325,8 +9620,7 @@ function OrcamentosPage({
     }, "\u2705 Aprovar e Avan\xE7ar")));
   })(), (modal === null || modal === void 0 ? void 0 : modal.type) === "detail" && (_b$historico2 => {
     const b = modal.budget;
-    const key = BUDGET_ID_MAP[b.id];
-    const itens = key && BUDGET_ITEMS_DATA[key] || [];
+    const itens = b.itens || [];
     const servicos = itens.filter(i => i.tipo === "servico");
     const materiais = itens.filter(i => i.tipo === "material");
     const totalServ = servicos.reduce((s, i) => s + i.vt, 0);
@@ -9502,7 +9796,137 @@ function OrcamentosPage({
       }
     }, "Hist\xF3rico da Esteira"), /*#__PURE__*/React.createElement(EsteiraTimeline, {
       historico: b.historico
-    })), itens.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    })), (() => {
+      const arqsB = arquivos[b.id] || [];
+      const podeAnexar = (user === null || user === void 0 ? void 0 : user.grupo) === "jet";
+      // Carregar arquivos se ainda não carregados
+      if (!arquivos[b.id] && !arquivos["_loading_" + b.id]) {
+        setArquivos(p => ({
+          ...p,
+          ["_loading_" + b.id]: true
+        }));
+        loadArquivos(b.id);
+      }
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: "#f0f9ff",
+          border: "1px solid #bae6fd",
+          borderRadius: 8,
+          padding: "10px 14px",
+          marginBottom: 12
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 8
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontWeight: 700,
+          fontSize: 11,
+          color: "#0369a1",
+          textTransform: "uppercase",
+          letterSpacing: .5
+        }
+      }, "\uD83D\uDCCE Arquivos Anexados (", arqsB.length, ")"), podeAnexar && /*#__PURE__*/React.createElement("button", {
+        style: {
+          ...btn(),
+          fontSize: 10,
+          padding: "3px 8px",
+          color: "#0369a1",
+          borderColor: "#7dd3fc"
+        },
+        onClick: () => setUploadModal(b)
+      }, "+ Anexar")), arqsB.length === 0 ? /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: "#9ca3af",
+          textAlign: "center",
+          padding: "8px 0"
+        }
+      }, "Nenhum arquivo anexado.", podeAnexar && /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: "#0369a1",
+          cursor: "pointer",
+          marginLeft: 4
+        },
+        onClick: () => setUploadModal(b)
+      }, "Clique aqui para anexar.")) : /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          gap: 4
+        }
+      }, arqsB.map(arq => {
+        var _arq$created_at;
+        return /*#__PURE__*/React.createElement("div", {
+          key: arq.id,
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "6px 8px",
+            background: "#fff",
+            borderRadius: 6,
+            border: "1px solid #e0f2fe"
+          }
+        }, /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: 16
+          }
+        }, fmtTipo(arq.tipo)), /*#__PURE__*/React.createElement("div", {
+          style: {
+            flex: 1,
+            minWidth: 0
+          }
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontWeight: 600,
+            fontSize: 12,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap"
+          }
+        }, arq.nome), /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 10,
+            color: "#9ca3af"
+          }
+        }, fmtSize(arq.size), " \xB7 ", arq.criado_por, " \xB7 ", (_arq$created_at = arq.created_at) === null || _arq$created_at === void 0 ? void 0 : _arq$created_at.slice(0, 10))), /*#__PURE__*/React.createElement("a", {
+          href: arq.url,
+          target: "_blank",
+          rel: "noreferrer",
+          style: {
+            ...btn(),
+            padding: "4px 8px",
+            fontSize: 10,
+            textDecoration: "none",
+            color: "#0369a1"
+          }
+        }, "\u2B07 Baixar"), podeAnexar && /*#__PURE__*/React.createElement("button", {
+          style: {
+            ...btn(),
+            padding: "4px 6px",
+            gap: 0,
+            color: "#ef4444"
+          },
+          onClick: () => handleDeleteArq(b.id, arq)
+        }, /*#__PURE__*/React.createElement("svg", {
+          width: "12",
+          height: "12",
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: "2"
+        }, /*#__PURE__*/React.createElement("polyline", {
+          points: "3 6 5 6 21 6"
+        }), /*#__PURE__*/React.createElement("path", {
+          d: "M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"
+        }))));
+      })));
+    })(), itens.length === 0 ? /*#__PURE__*/React.createElement("div", {
       style: {
         textAlign: "center",
         color: "#6b7280",
@@ -9587,7 +10011,79 @@ function OrcamentosPage({
       style: btn("primary"),
       onClick: () => setModal(null)
     }, "Fechar")));
-  })(), confirm && /*#__PURE__*/React.createElement(Confirm, {
+  })(), uploadModal && /*#__PURE__*/React.createElement(Modal, {
+    title: `📎 Anexar Arquivo — ${uploadModal.titulo}`,
+    onClose: () => {
+      setUploadModal(null);
+      setUploadForm({
+        nome: "",
+        arquivo: null
+      });
+    }
+  }, /*#__PURE__*/React.createElement(FRow, {
+    full: true
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Nome do arquivo *"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: uploadForm.nome,
+    onChange: e => setUploadForm(p => ({
+      ...p,
+      nome: e.target.value
+    })),
+    placeholder: "Ex: Proposta Revisada, Contrato Assinado..."
+  }))), /*#__PURE__*/React.createElement(FRow, {
+    full: true
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Arquivo *"
+  }, /*#__PURE__*/React.createElement("input", {
+    ref: fileInputRef,
+    type: "file",
+    style: {
+      ...inp,
+      padding: "6px"
+    },
+    onChange: e => setUploadForm(p => {
+      var _e$target$files$;
+      return {
+        ...p,
+        arquivo: e.target.files[0],
+        nome: p.nome || ((_e$target$files$ = e.target.files[0]) === null || _e$target$files$ === void 0 ? void 0 : _e$target$files$.name.split(".")[0]) || ""
+      };
+    })
+  }))), uploadForm.arquivo && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#6b7280",
+      padding: "6px 10px",
+      background: "#f9fafb",
+      borderRadius: 6,
+      marginBottom: 8
+    }
+  }, fmtTipo(uploadForm.arquivo.type), " ", uploadForm.arquivo.name, " (", fmtSize(uploadForm.arquivo.size), ")"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "flex-end",
+      gap: 8,
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    style: btn(),
+    onClick: () => {
+      setUploadModal(null);
+      setUploadForm({
+        nome: "",
+        arquivo: null
+      });
+    }
+  }, "Cancelar"), /*#__PURE__*/React.createElement("button", {
+    style: {
+      ...btn("primary"),
+      opacity: uploading ? 0.6 : 1
+    },
+    onClick: handleUpload,
+    disabled: uploading
+  }, uploading ? "Enviando..." : "📎 Anexar"))), confirm && /*#__PURE__*/React.createElement(Confirm, {
     msg: `Excluir "${confirm.titulo}"?`,
     onOk: () => del(confirm.id),
     onCancel: () => setConfirm(null)
@@ -9598,10 +10094,12 @@ function OrcamentosPage({
 
 // ─── ITENS ────────────────────────────────────────────────────────────────────
 function ItensPage({
+  items = [],
+  setItems,
+  syncItem,
   showToast,
   user
 }) {
-  const [items, setItems] = useState([...ALL_ITEMS]);
   const [search, setSearch] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState("all");
   const [modal, setModal] = useState(null);
@@ -9626,7 +10124,7 @@ function ItensPage({
     const orc_key = OBRA_ORC_MAP[o.cod];
     const orc_itens = orc_key ? BUDGET_ITEMS_DATA[orc_key] || [] : [];
     const gastoCalc = orc_itens.reduce((s, item) => {
-      const itemBase = ALL_ITEMS.find(ai => ai.descricao === item.descricao);
+      const itemBase = (window.__SIR_ITEMS || ALL_ITEMS).find(ai => ai.descricao === item.descricao);
       const cu = (itemBase === null || itemBase === void 0 ? void 0 : itemBase.cu) || 0;
       return s + (cu > 0 ? cu * (item.qtd || 1) : 0);
     }, 0);
@@ -9775,6 +10273,7 @@ function ItensPage({
     setItems(p => p.find(i => i.id === n.id) ? p.map(i => i.id === n.id ? n : i) : [...p, n]);
     setModal(null);
     showToast(form.id ? "Item atualizado!" : "Item criado!");
+    if (syncItem) syncItem(n);
   };
   const del = id => {
     setItems(p => p.filter(i => i.id !== id));
@@ -10317,7 +10816,7 @@ function PontosPage({
     const orc_key = OBRA_ORC_MAP[o.cod];
     const orc_itens = orc_key ? BUDGET_ITEMS_DATA[orc_key] || [] : [];
     const gastoCalc = orc_itens.reduce((s, item) => {
-      const itemBase = ALL_ITEMS.find(ai => ai.descricao === item.descricao);
+      const itemBase = (window.__SIR_ITEMS || ALL_ITEMS).find(ai => ai.descricao === item.descricao);
       const cu = (itemBase === null || itemBase === void 0 ? void 0 : itemBase.cu) || 0;
       return s + (cu > 0 ? cu * (item.qtd || 1) : 0);
     }, 0);
@@ -11001,9 +11500,12 @@ function PontosPage({
 
 // ─── USUÁRIOS ─────────────────────────────────────────────────────────────────
 function UsuariosPage({
+  users = [],
+  setUsers,
+  syncUsuario,
+  delUsuario,
   showToast
 }) {
-  const [users, setUsers] = useState([...PROFILES]);
   const [modal, setModal] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [form, setForm] = useState({});
@@ -11029,7 +11531,7 @@ function UsuariosPage({
     const orc_key = OBRA_ORC_MAP[o.cod];
     const orc_itens = orc_key ? BUDGET_ITEMS_DATA[orc_key] || [] : [];
     const gastoCalc = orc_itens.reduce((s, item) => {
-      const itemBase = ALL_ITEMS.find(ai => ai.descricao === item.descricao);
+      const itemBase = (window.__SIR_ITEMS || ALL_ITEMS).find(ai => ai.descricao === item.descricao);
       const cu = (itemBase === null || itemBase === void 0 ? void 0 : itemBase.cu) || 0;
       return s + (cu > 0 ? cu * (item.qtd || 1) : 0);
     }, 0);
@@ -11573,7 +12075,7 @@ function CustosInternoPage({
     const orc_key = OBRA_ORC_MAP[o.cod];
     const orc_itens = orc_key ? BUDGET_ITEMS_DATA[orc_key] || [] : [];
     const gastoCalc = orc_itens.reduce((s, item) => {
-      const itemBase = ALL_ITEMS.find(ai => ai.descricao === item.descricao);
+      const itemBase = (window.__SIR_ITEMS || ALL_ITEMS).find(ai => ai.descricao === item.descricao);
       const cu = (itemBase === null || itemBase === void 0 ? void 0 : itemBase.cu) || 0;
       return s + (cu > 0 ? cu * (item.qtd || 1) : 0);
     }, 0);
@@ -13359,7 +13861,9 @@ function App() {
   const [espelhos, setEspelhos] = useState([]); // obras espelhadas em Obras e Custos
   const [custosInt, setCustosInt] = useState([]); // custos da aba Custos Interno
   const [fatInt, setFatInt] = useState([]); // faturamentos internos (contratos, outras)
-  const [investInt, setInvestInt] = useState([]); // investimentos futuros // abre orçamento direto do dashboard
+  const [investInt, setInvestInt] = useState([]); // investimentos futuros
+  const [sbUsers, setSbUsers] = useState([...PROFILES]); // usuários do sistema
+  const [items, setItems] = useState([...ALL_ITEMS]); // itens com custo
 
   const showToast = (msg, type = "ok") => {
     setToast({
@@ -13372,7 +13876,7 @@ function App() {
   // ── Supabase sync functions ──────────────────────────────────────────────────
   const loadFromSupabase = async () => {
     try {
-      const [dbObras, dbBudgets, dbPontos, dbCustos, dbEspelhos, dbFats, dbInvests] = await Promise.all([sb.get("sir_obras", "order=cod"), sb.get("sir_orcamentos", "order=ordem"), sb.get("sir_pontos", "order=created_at"), sb.get("sir_custos", "order=data"), sb.get("sir_espelhos", "order=created_at"), sb.get("sir_faturamentos", "order=data"), sb.get("sir_investimentos", "order=created_at")]);
+      const [dbObras, dbBudgets, dbPontos, dbCustos, dbEspelhos, dbFats, dbInvests, dbUsers, dbItens] = await Promise.all([sb.get("sir_obras", "order=cod"), sb.get("sir_orcamentos", "order=ordem"), sb.get("sir_pontos", "order=created_at"), sb.get("sir_custos", "order=data"), sb.get("sir_espelhos", "order=created_at"), sb.get("sir_faturamentos", "order=data"), sb.get("sir_investimentos", "order=created_at"), sb.get("sir_usuarios", "order=nome"), sb.get("sir_itens", "order=codigo")]);
 
       // Obras: se Supabase vazio, faz seed com OBRAS_DATA
       if (dbObras && dbObras.length > 0) {
@@ -13402,6 +13906,14 @@ function App() {
       })));
       if (dbFats !== null && dbFats !== void 0 && dbFats.length) setFatInt(dbFats);
       if (dbInvests !== null && dbInvests !== void 0 && dbInvests.length) setInvestInt(dbInvests);
+      if (dbUsers !== null && dbUsers !== void 0 && dbUsers.length) setSbUsers(dbUsers);
+      if (dbItens && dbItens.length > 0) {
+        setItems(dbItens);
+      } else if (dbItens && dbItens.length === 0) {
+        // Seed inicial
+        setItems([...ALL_ITEMS]);
+        Promise.all(ALL_ITEMS.map(i => sb.upsert("sir_itens", i))).catch(() => {});
+      }
       console.log("Supabase carregado: obras=" + (dbObras === null || dbObras === void 0 ? void 0 : dbObras.length) + " pontos=" + (dbPontos === null || dbPontos === void 0 ? void 0 : dbPontos.length));
     } catch (e) {
       console.log("Supabase load error:", e.message);
@@ -13415,8 +13927,24 @@ function App() {
     await sb.del("sir_obras", id);
   };
   const syncBudget = async b => {
-    const r = await sb.upsert("sir_orcamentos", b);
-    if (!r) console.error("syncBudget falhou", b.id);
+    // Filtrar apenas campos que existem na tabela
+    const payload = {
+      id: b.id,
+      titulo: b.titulo || "",
+      cliente: b.cliente || null,
+      observacoes: b.observacoes || b.obs || null,
+      etapa: b.etapa || "rascunho",
+      created_at: b.created_at || null,
+      updated_at: new Date().toISOString().slice(0, 10),
+      created_by: b.created_by || null,
+      ordem: b.ordem || 0,
+      historico: b.historico || [],
+      itens: b.itens || [],
+      total: b.total || 0
+    };
+    console.log("syncBudget enviando:", JSON.stringify(payload).slice(0, 200));
+    const r = await sb.upsert("sir_orcamentos", payload);
+    if (!r) console.error("syncBudget falhou", b.id);else console.log("syncBudget OK", b.id);
   };
   const delBudget = async id => {
     await sb.del("sir_orcamentos", id);
@@ -13446,6 +13974,15 @@ function App() {
   const syncInvest = async i => {
     await sb.upsert("sir_investimentos", i).catch(() => {});
   };
+  const syncUsuario = async u => {
+    await sb.upsert("sir_usuarios", u).catch(() => {});
+  };
+  const syncItem = async i => {
+    await sb.upsert("sir_itens", i).catch(() => {});
+  };
+  const delUsuario = async id => {
+    await sbFetch("sir_usuarios", "DELETE", null, "id=eq." + id);
+  };
   const delInvest = async id => {
     await sbFetch("sir_investimentos", "DELETE", null, "id=eq." + id);
   };
@@ -13465,6 +14002,11 @@ function App() {
 
   // Seções colapsáveis — DEVE ficar antes de qualquer return condicional
   const [collapsed, setCollapsed] = useState({});
+
+  // Bridge global para items — permite componentes filhos acessarem items atualizados
+  React.useEffect(() => {
+    window.__SIR_ITEMS = items;
+  }, [items]);
   const toggleSection = s => setCollapsed(p => ({
     ...p,
     [s]: !p[s]
@@ -13584,10 +14126,14 @@ function App() {
           setOpenBudgetId: setOpenBudgetId,
           syncBudget: syncBudget,
           delBudget: delBudget,
+          items: items,
           showToast: showToast
         });
       case "itens":
         return /*#__PURE__*/React.createElement(ItensPage, {
+          items: items,
+          setItems: setItems,
+          syncItem: syncItem,
           showToast: showToast,
           user: user
         });
@@ -13605,6 +14151,10 @@ function App() {
         });
       case "usuarios":
         return /*#__PURE__*/React.createElement(UsuariosPage, {
+          users: sbUsers,
+          setUsers: setSbUsers,
+          syncUsuario: syncUsuario,
+          delUsuario: delUsuario,
           showToast: showToast
         });
       default:
